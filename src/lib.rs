@@ -112,6 +112,35 @@
 //! }
 //! ```
 //!
+//! The field within the generated struct can additionally be made public by
+//! adding `pub` before the storage type:
+//!
+//! ```ignore
+//! #[macro_use]
+//! extern crate bitflags;
+//!
+//! mod example {
+//!     bitflags! {
+//!         pub struct Flags1: pub u32 {
+//!             const A = 0b00000001;
+//!         }
+//!     }
+//!     bitflags! {
+//!         pub struct Flags2: u32 {
+//!             const B = 0b00000010;
+//!         }
+//!     }
+//! }
+//!
+//! fn main() {
+//!     let flag1 = example::Flags1::A;
+//!     let flag2 = example::Flags2::B;
+//!
+//!     let bits1 = flag1.bits;
+//!     let bits2 = flag2.bits; // error: field `bits` is private
+//! }
+//! ```
+//!
 //! # Attributes
 //!
 //! Attributes can be attached to the generated `struct` by placing them
@@ -338,7 +367,26 @@ macro_rules! bitflags {
     ) => {
         __bitflags! {
             $(#[$outer])*
-            (pub) $BitFlags: $T {
+            (pub) $BitFlags: () $T {
+                $(
+                    $(#[$inner $($args)*])*
+                    $Flag = $value;
+                )+
+            }
+        }
+    };
+    (
+        $(#[$outer:meta])*
+        pub struct $BitFlags:ident: pub $T:ty {
+            $(
+                $(#[$inner:ident $($args:tt)*])*
+                const $Flag:ident = $value:expr;
+            )+
+        }
+    ) => {
+        __bitflags! {
+            $(#[$outer])*
+            (pub) $BitFlags: (pub) $T {
                 $(
                     $(#[$inner $($args)*])*
                     $Flag = $value;
@@ -357,7 +405,26 @@ macro_rules! bitflags {
     ) => {
         __bitflags! {
             $(#[$outer])*
-            () $BitFlags: $T {
+            () $BitFlags: () $T {
+                $(
+                    $(#[$inner $($args)*])*
+                    $Flag = $value;
+                )+
+            }
+        }
+    };
+    (
+        $(#[$outer:meta])*
+        struct $BitFlags:ident: pub $T:ty {
+            $(
+                $(#[$inner:ident $($args:tt)*])*
+                const $Flag:ident = $value:expr;
+            )+
+        }
+    ) => {
+        __bitflags! {
+            $(#[$outer])*
+            () $BitFlags: (pub) $T {
                 $(
                     $(#[$inner $($args)*])*
                     $Flag = $value;
@@ -376,7 +443,26 @@ macro_rules! bitflags {
     ) => {
         __bitflags! {
             $(#[$outer])*
-            (pub ($($vis)+)) $BitFlags: $T {
+            (pub ($($vis)+)) $BitFlags: () $T {
+                $(
+                    $(#[$inner $($args)*])*
+                    $Flag = $value;
+                )+
+            }
+        }
+    };
+    (
+        $(#[$outer:meta])*
+        pub ($($vis:tt)+) struct $BitFlags:ident: pub $T:ty {
+            $(
+                $(#[$inner:ident $($args:tt)*])*
+                const $Flag:ident = $value:expr;
+            )+
+        }
+    ) => {
+        __bitflags! {
+            $(#[$outer])*
+            (pub ($($vis)+)) $BitFlags: (pub) $T {
                 $(
                     $(#[$inner $($args)*])*
                     $Flag = $value;
@@ -391,7 +477,7 @@ macro_rules! bitflags {
 macro_rules! __bitflags {
     (
         $(#[$outer:meta])*
-        ($($vis:tt)*) $BitFlags:ident: $T:ty {
+        ($($vis:tt)*) $BitFlags:ident: ($($field_vis:tt)*) $T:ty {
             $(
                 $(#[$inner:ident $($args:tt)*])*
                 $Flag:ident = $value:expr;
@@ -401,7 +487,8 @@ macro_rules! __bitflags {
         #[derive(Copy, PartialEq, Eq, Clone, PartialOrd, Ord, Hash)]
         $(#[$outer])*
         $($vis)* struct $BitFlags {
-            bits: $T,
+            /// The raw value of the flags currently stored.
+            $($field_vis)* bits: $T,
         }
 
         __impl_bitflags! {
@@ -1225,5 +1312,20 @@ mod tests {
 
         assert_eq!(format!("{:?}", Flags::empty()), "NONE");
         assert_eq!(format!("{:?}", Flags::SOME), "SOME");
+    }
+
+    #[test]
+    fn test_pub_field() {
+        mod module {
+            bitflags! {
+                pub struct Test: pub u8 {
+                    const FOO = 1;
+                }
+            }
+        }
+
+        // Without the `pub` before `u8`, the `bits` field cannot
+        // be accessed.
+        assert_eq!(module::Test::FOO.bits, 1)
     }
 }
